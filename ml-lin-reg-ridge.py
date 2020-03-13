@@ -43,7 +43,7 @@ for alpha in alpha_space:
     ridge.alpha = alpha
 
     # Perform 10-fold CV: ridge_cv_scores
-    ridge_cv_scores = cross_val_score(ridge, X, y, cv=5)
+    ridge_cv_scores = cross_val_score(ridge, X, y, cv=10)
 
     # Append the mean of ridge_cv_scores to ridge_scores
     ridge_scores.append(np.mean(ridge_cv_scores))
