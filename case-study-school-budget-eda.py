@@ -7,6 +7,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import FeatureUnion, Pipeline
 from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestClassifier
+
 NUMERIC_COLUMNS = ['FTE', 'Total']
 LABELS = ['Function',
  'Use',
@@ -152,6 +154,30 @@ pl = Pipeline([
         ]
     )),
     ('clf', OneVsRestClassifier(LogisticRegression()))
+])
+
+# Fit to the training data
+pl.fit(X_train, y_train)
+
+# Compute and print accuracy
+accuracy = pl.score(X_test, y_test)
+print("\nAccuracy on budget dataset: ", accuracy)
+
+
+pl = Pipeline([
+    ('union', FeatureUnion(
+        transformer_list=[
+            ('numeric_features', Pipeline([
+                ('selector', get_numeric_data),
+                ('imputer', SimpleImputer())
+            ])),
+            ('text_features', Pipeline([
+                ('selector', get_text_data),
+                ('vectorizer', CountVectorizer())
+            ]))
+        ]
+    )),
+    ('clf', RandomForestClassifier())
 ])
 
 # Fit to the training data
