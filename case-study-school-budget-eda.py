@@ -1,9 +1,22 @@
+from sklearn.preprocessing import FunctionTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 import pandas as pd
 import matplotlib.pyplot as plt
 from multilabel import *
 from sklearn.linear_model import LogisticRegression
 from sklearn.multiclass import OneVsRestClassifier
+from sklearn.pipeline import FeatureUnion, Pipeline
+from sklearn.impute import SimpleImputer
+NUMERIC_COLUMNS = ['FTE', 'Total']
+LABELS = ['Function',
+ 'Use',
+ 'Sharing',
+ 'Reporting',
+ 'Student_Type',
+ 'Position_Type',
+ 'Object_Type',
+ 'Pre_K',
+ 'Operating_Status']
 # Define combine_text_columns()
 def combine_text_columns(data_frame, to_drop=NUMERIC_COLUMNS + LABELS):
     """ converts all text in each row of data_frame to single vector """
@@ -14,12 +27,11 @@ def combine_text_columns(data_frame, to_drop=NUMERIC_COLUMNS + LABELS):
 
     # Replace nans with blanks
     text_data.fillna("", inplace=True)
-
     # Join all text items in a row that have a space in between
     return text_data.apply(lambda x: " ".join(x), axis=1)
 
 # Print the summary statistics
-df = pd.read_csv('TrainingData.csv')
+df = pd.read_csv('TrainingData.csv', index_col=0)
 print(df.describe())
 
 # Create the histogram
@@ -32,16 +44,6 @@ plt.ylabel('num employees')
 
 # Display the histogram
 plt.show()
-NUMERIC_COLUMNS = ['FTE', 'Total']
-LABELS = ['Function',
- 'Use',
- 'Sharing',
- 'Reporting',
- 'Student_Type',
- 'Position_Type',
- 'Object_Type',
- 'Pre_K',
- 'Operating_Status']
 
 # Define the lambda function: categorize_label
 def categorize_label(x): return x.astype('category')
@@ -111,9 +113,50 @@ text_vector = combine_text_columns(df)
 # Fit and transform vec_basic
 vec_basic.fit_transform(text_vector)
 # Print number of tokens of vec_basic
-print("There are {} tokens in the dataset".format(
-    len(vec_basic.get_feature_names())))
+print("There are {} tokens in the dataset".format( len(vec_basic.get_feature_names())))
 # Fit and transform vec_alphanumeric
 vec_alphanumeric.fit_transform(text_vector)
 # Print number of tokens of vec_alphanumeric
 print("There are {} alpha-numeric tokens in the dataset".format(len(vec_alphanumeric.get_feature_names())))
+
+# Get the dummy encoding of the labels
+dummy_labels = pd.get_dummies(df[LABELS])
+
+# Get the columns that are features in the original df
+NON_LABELS = [c for c in df.columns if c not in LABELS]
+
+# Split into training and test sets
+X_train, X_test, y_train, y_test = multilabel_train_test_split(df[NON_LABELS],
+                                                               dummy_labels,
+                                                               0.2,
+                                                               seed=123)
+
+# Preprocess the text data: get_text_data
+get_text_data = FunctionTransformer(combine_text_columns, validate=False)
+
+# Preprocess the numeric data: get_numeric_data
+get_numeric_data = FunctionTransformer( lambda x: x[NUMERIC_COLUMNS], validate=False)
+
+# Complete the pipeline: pl
+pl = Pipeline([
+    ('union', FeatureUnion(
+        transformer_list=[
+            ('numeric_features', Pipeline([
+                ('selector', get_numeric_data),
+                ('imputer', SimpleImputer())
+            ])),
+            ('text_features', Pipeline([
+                ('selector', get_text_data),
+                ('vectorizer', CountVectorizer())
+            ]))
+        ]
+    )),
+    ('clf', OneVsRestClassifier(LogisticRegression()))
+])
+
+# Fit to the training data
+pl.fit(X_train, y_train)
+
+# Compute and print accuracy
+accuracy = pl.score(X_test, y_test)
+print("\nAccuracy on budget dataset: ", accuracy)
